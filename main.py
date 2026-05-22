@@ -1,11 +1,12 @@
 import customtkinter as ctk
+import time
 from auth import AuthManager
 from database import Database
 
 class App:
    def __init__(self):
       ctk.set_appearance_mode('dark')
-      ctk.set_default_color_theme('dark-blue')
+      ctk.set_default_color_theme('blue')
 
       self.window = ctk.CTk()
       self.window.title('QuizApp')
@@ -15,11 +16,11 @@ class App:
       self.db = Database()
       self.auth = AuthManager(self.db)
 
-      self.main_frame = ctk.CTkFrame(self.window)
-      self.login_frame = ctk.CTkFrame(self.window)
-      self.register_frame = ctk.CTkFrame(self.window)
-      self.menu_frame = ctk.CTkFrame(self.window)
-      self.game_frame = ctk.CTkFrame(self.window)
+      self.main_frame = ctk.CTkFrame(self.window, corner_radius=15)
+      self.login_frame = ctk.CTkFrame(self.window, corner_radius=15)
+      self.register_frame = ctk.CTkFrame(self.window, corner_radius=15)
+      self.menu_frame = ctk.CTkFrame(self.window, corner_radius=15)
+      self.game_frame = ctk.CTkFrame(self.window, corner_radius=15)
 
       self.main_frame.pack(fill='both', expand=True, padx=20, pady=20)
       self.login_frame.pack(fill='both', expand=True, padx=20, pady=20)
@@ -34,8 +35,9 @@ class App:
       # Фрейм главный
       self.main_label = ctk.CTkLabel(
          self.main_frame,
-         text='Викторина',
-         font=('Arial', 28)
+         text='✨ ВИКТОРИНА ✨',
+         font=('Arial', 36, 'bold'),
+         text_color='#f1c40f'
       )
       self.main_label.pack(pady=50)
 
@@ -44,7 +46,10 @@ class App:
          text='Вход',
          width=200,
          height=40,
-         font=('Arial', 16),
+         font=('Arial', 16, 'bold'),
+         corner_radius=10,
+         fg_color='#4a90e2',
+         hover_color='#357abd',
          command=self.show_login
       )
       self.login_button.pack(pady=10)
@@ -157,7 +162,10 @@ class App:
          text='ИГРАТЬ',
          width=250,
          height=50,
-         font=('Arial', 20),
+         font=('Arial', 20, 'bold'),
+         corner_radius=15,
+         fg_color='#2ecc71',
+         hover_color='#27ae60',
          command=self.start_game
       )
       self.play_button.pack(pady=20)
@@ -179,8 +187,12 @@ class App:
       self.top5_textbox = ctk.CTkTextbox(
          self.menu_frame,
          width=300,
-         height=150,
-         font=('Arial', 14)
+         height=160,
+         font=('Arial', 14),
+         corner_radius=10,
+         fg_color='#1e1e1e',
+         text_color='#ecf0f1',
+         state='disabled'
       )
       self.top5_textbox.pack(pady=10)
 
@@ -189,7 +201,10 @@ class App:
          text='Выйти из аккаунта',
          width=150,
          height=35,
-         fg_color='gray',
+         font=('Arial', 14),
+         corner_radius=8,
+         fg_color='#e74c3c',
+         hover_color='#c0392b',
          command=self.logout
       )
       self.logout_button.pack(pady=20)
@@ -221,6 +236,13 @@ class App:
          font=('Arial', 16)
       )
       self.score_label.pack(pady=20)
+
+      self.timer_label = ctk.CTkLabel(
+         self.game_frame,
+         text="Время: 0 сек",
+         font=('Arial', 16)
+      )
+      self.timer_label.pack(pady=5)
 
       self.quit_game_button = ctk.CTkButton(
          self.game_frame,
@@ -286,7 +308,9 @@ class App:
       self.current_score = 0
       self.current_question_index = 0
       self.questions = []
+      self.time_elapsed = 0
       self.score_label.configure(text='Счёт: 0')
+      self.timer_label.configure(text='Время: 0 сек')
 
       self.menu_frame.pack_forget()
       self.game_frame.pack(fill='both', expand=True, padx=20, pady=20)
@@ -294,23 +318,49 @@ class App:
       self.load_questions()
       self.show_question()
 
+   def start_timer(self):
+      self.question_start_time = time.time()
+      self._schedule_timer_update()
+
+   def _schedule_timer_update(self):
+      self.timer_after_id = self.window.after(1000, self.update_timer)
+
+   def update_timer(self):
+      if hasattr(self, 'question_start_time'):
+         elapsed = int(time.time() - self.question_start_time)
+         self.timer_label.configure(text=f'Время вопроса: {elapsed} сек')
+         self._schedule_timer_update()
+
+   def stop_timer(self):
+      if hasattr(self, 'question_start_time'):
+         elapsed = int(time.time() - self.question_start_time)
+         self.time_elapsed += elapsed
+         delattr(self, 'question_start_time')
+         if hasattr(self, 'timer_after_id'):
+            self.window.after_cancel(self.timer_after_id)
+            delattr(self, 'timer_after_id')
+
    def quit_game(self):
       self.game_frame.pack_forget()
       self.menu_frame.pack(fill='both', expand=True, padx=20, pady=20)
+      self.stop_timer()
 
    def load_questions(self):
-      self.questions = [
-         {
-            'question': 'Сколько мне лет?',
-            'options': ['6', '7', '23', '19'],
-            'correct': 3
-         },
-         {
-            'question': 'Сколько мне пальцев?',
-            'options': ['6', '10', '23', '19'],
-            'correct': 1
-         },
-      ]
+      self.questions = self.db.get_random_questions(10)
+      if not self.questions:
+         print('В базе нет вопросов!')
+         self.quit_game()
+
+   def check_answer(self, selected_index):
+      self.stop_timer()
+    
+      q = self.questions[self.current_question_index]
+      if selected_index == q['correct']:
+         self.current_score += 100
+         self.score_label.configure(text=f'Счёт: {self.current_score}')
+
+      self.current_question_index += 1
+      self.show_question()
 
    def show_question(self):
       if self.current_question_index < len(self.questions):
@@ -318,34 +368,36 @@ class App:
          self.question_label.configure(text=q['question'])
          for i, btn in enumerate(self.option_buttons):
             btn.configure(text=q['options'][i])
+         self.start_timer()
       else:
          self.end_game()
 
-   def check_answer(self, selected_index):
-      q = self.questions[self.current_question_index]
-      if selected_index == q['correct']:
-         self.current_score += 100
-         self.score_label.configure(text=f'Счет: {self.current_score}')
-
-      self.current_question_index += 1
-      self.show_question()
-
    def end_game(self):
-      print(f'Игра окончена! Ваш счет: {self.current_score}')
-      self.db.save_score(self.current_user_id, self.current_score)
-      
+      correct_answers = self.current_score // 100
+      final_score = correct_answers * 100 - self.time_elapsed * 5
+      if final_score < 0:
+         final_score = 0
+
+      print(f'Игра окончена!')
+      print(f'Правильных ответов: {correct_answers}')
+      print(f'Общее время: {self.time_elapsed} сек')
+      print(f'Итоговый счёт: {final_score}')
+
+      self.db.save_score(self.current_user_id, final_score)
 
       best = self.db.get_best_score(self.current_user_id)
       self.best_score_label.configure(text=f'Ваш лучший счёт: {best}')
       self.update_top5()
-      
+
       self.quit_game()
 
    def update_top5(self):
+      self.top5_textbox.configure(state='normal')
       self.top5_textbox.delete("0.0", "end")
       top5 = self.db.get_top5()
       for i, (username, score) in enumerate(top5, 1):
          self.top5_textbox.insert("end", f"{i}. {username} — {score} очков\n")
+      self.top5_textbox.configure(state='disabled')
 
 if __name__ == "__main__":
    app = App()

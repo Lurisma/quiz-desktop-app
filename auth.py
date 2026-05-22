@@ -9,11 +9,11 @@ class AuthManager:
 
    def login(self, username, password):
       user = self.db.get_user(username)
-    
+
       if not user:
          print(f'Пользователь {username} не найден')
          return None
-    
+
       user_id, db_username, hashed_password = user
       if self._hash_password(password) == hashed_password:
          print(f'Добро пожаловать, {username}!')
@@ -21,12 +21,12 @@ class AuthManager:
       else:
          print('Неверный пароль')
          return None
-   
+
    def register(self, username, password):
       if not username or not password:
          print('Логин и пароль не могу быть пустыми')
          return False
-      
+
       hashed = self._hash_password(password)
       success = self.db.add_user(username, hashed)
 
